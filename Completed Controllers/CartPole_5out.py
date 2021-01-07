@@ -145,8 +145,10 @@ for episode in range(EPISODES):
         else:
             a_num = np.random.randint(len(action_list))
             a = action_list[a_num]
+            
         obs2, r, done, info = env.step(a)
         
+        # Calculate Reward
         if np.linalg.norm(np.zeros(1) - np.array([obs2[0]])) < 0.1:
             r2 = 0
         else:
@@ -170,13 +172,13 @@ for episode in range(EPISODES):
     
     # Print Results of Episode
     r = total_reward   
-    print("[Episode: {:5}] Reward: {:5} 𝜺-greedy: {:5.2f}".format(episode + 1, r, eps))
+    print("[Episode: {:5}] Reward: {:5} -greedy: {:5.2f}".format(episode + 1, r, eps))
     
     # Determine if the NN has learned to balance the system and end if so
     rewards.append(r)
     if len(rewards) == rewards.maxlen:
 
-        if np.mean(rewards) >= 200:
+        if np.mean(rewards) >= 190:
             print("Game cleared in {} games with {}".format(episode + 1, np.mean(rewards)))
             break
 

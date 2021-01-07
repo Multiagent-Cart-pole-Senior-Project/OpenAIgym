@@ -1,15 +1,14 @@
-# Balancing a Single Cart-Pole using Deep Q-Learning
-#   Author: Ryan Russell
-#   Based on code from: 
-
-import torch
-import torch.nn as nn
-import numpy as np
-import random
 import gym
-from collections import deque
+import numpy as np
+import matplotlib.pyplot as plt
 
-# PARAMETERS
+# Parameters
+T = 0.02
+K1 = -23.5380
+K2 = -5.1391
+K3 = -0.7339
+K4 = -1.2783
+
 GAMMA = 0.99
 EPISODES = 3_000
 BATCH_SIZE = 64
@@ -117,8 +116,10 @@ def train_helper(agent, minibatch):
 
     return agent.train(Q_predict, Q_target)
 
-# Set up Environment
-env = gym.make("CartPole-v0")
+
+# Load Environment
+env1 = gym.make('CartPole-v0')
+env2 = gym.make('CartPole-v0')
 rewards = deque(maxlen=100)
 agent = Agent(input_dim, output_dim, HIDDEN_DIM)
 replay_memory = []
@@ -127,17 +128,59 @@ replay_time = 0
 # Episode Loop
 for episode in range(EPISODES):
 
+    theta_r = []
+    theta_dot_r = []
+    x_r = []
+    x_dot_r = []
+
     # Calculate epsilon for episode
     slope = (MIN_EPS - 1) / MAX_EPISODE
     eps = max(slope * episode + 1, MIN_EPS)
     
     # Reset Environment
-    obs = env.reset()
+    obs = env2.reset()
+    observation = env1.reset()
     done = False
     total_reward = 0
-    
-    # Simulation Loop
+
     while not done:
+        
+        #
+        # LINEAR CONTROLLER
+        #
+        
+        env.render()
+        
+        # Get observations
+        theta = observation[2]
+        theta_dot = observation[3]
+        x = observation[0]
+        x_dot = observation[1]   
+
+        # Save observations for recording
+        theta_r.append(theta)
+        theta_dot_r.append(theta_dot)
+        x_r.append(x)
+        x_dot_r.append(x_dot)
+        
+        # Calculate Control Input
+        if t == 0:
+            u = np.array([(-K1 * theta + -K2 * theta_dot + -K3 * x + -K4 * x_dot)])
+        else:
+            u = (-K1 * theta + -K2 * theta_dot + -K3 * x + -K4 * x_dot)
+            
+        # Apply Control Input
+        observation, reward, done, info = env1.step(u)
+        
+        if done:
+            print("Episode finished after {} timesteps".format(t+1))
+            break
+            
+                
+        # 
+        # RL CONTROLLER
+        #
+        
         # Determine Action
         if np.random.rand() > eps:
             a_num = agent.get_action(obs)
@@ -145,14 +188,13 @@ for episode in range(EPISODES):
         else:
             a_num = np.random.randint(len(action_list))
             a = action_list[a_num]
-        obs2, r, done, info = env.step(a)
-        
-        if np.linalg.norm(np.zeros(1) - np.array([obs2[0]])) < 0.1:
-            r2 = 0
-        else:
-            r2 = -0.9
             
-        r = r + r2
+        obs2, r, done, info = env2.step(a)
+        
+        # Calculate Reward
+        r2 = - np.linalg.norm(np.array([observation[0], observation[1], observation[2], observation[3]]) - np.array([obs2[0], obs2[1], obs2[2], obs2[3]]))
+            
+        r = float(r) + r2
         
         # Record Results
         total_reward += r
@@ -167,21 +209,29 @@ for episode in range(EPISODES):
             train_helper(agent, minibatch)
 
         obs = obs2
-    
+            
     # Print Results of Episode
     r = total_reward   
-    print("[Episode: {:5}] Reward: {:5} 𝜺-greedy: {:5.2f}".format(episode + 1, r, eps))
+    print("[Episode: {:5}] Reward: {:5} -greedy: {:5.2f}".format(episode + 1, r, eps))
     
     # Determine if the NN has learned to balance the system and end if so
     rewards.append(r)
     if len(rewards) == rewards.maxlen:
 
-        if np.mean(rewards) >= 200:
+        if np.mean(rewards) >= 190:
             print("Game cleared in {} games with {}".format(episode + 1, np.mean(rewards)))
             break
-
-# Close the Environment
+ 
+# Close Environment
 env.close()
 
-# Save NN Model
-torch.save(agent,'net.pth')
+# Plot Outputs
+plt.plot([t for t in range(len(x_r)],x_r)
+plt.ylabel(f"x-position [m]")
+plt.xlabel(f"Time Steps")
+plt.show()
+
+plt.plot([t for t in range(len(theta_r))],theta_r)
+plt.ylabel(f"Pole Angle [rad]")
+plt.xlabel(f"Time Steps")
+plt.show()

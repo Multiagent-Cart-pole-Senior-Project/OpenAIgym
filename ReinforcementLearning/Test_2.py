@@ -10,17 +10,16 @@ import gym
 from collections import namedtuple
 from collections import deque
 from typing import List, Tuple
-import matplotlib.pyplot as plt
 
 gamma = 0.99
-n_episode = 3_000
+n_episode = 1_000
 batch_size = 64
 replay_mem = 50_000
 min_eps = 0.01
 hidden_dim = 12
-max_episode = 500
+max_episode = 50
 
-action_list = np.array([-10, -3, 0, 3, 10])
+action_list = np.array([0, 1])
 
 class DQN(torch.nn.Module):
     def __init__(self, input_dim: int, output_dim: int, hidden_dim: int) -> None:
@@ -45,18 +44,6 @@ class DQN(torch.nn.Module):
             torch.nn.BatchNorm1d(hidden_dim),
             torch.nn.PReLU()
         )
-        
-        self.layer3 = torch.nn.Sequential(
-            torch.nn.Linear(hidden_dim, hidden_dim),
-            torch.nn.BatchNorm1d(hidden_dim),
-            torch.nn.PReLU()
-        )
-        
-        self.layer4 = torch.nn.Sequential(
-            torch.nn.Linear(hidden_dim, hidden_dim),
-            torch.nn.BatchNorm1d(hidden_dim),
-            torch.nn.PReLU()
-        )
 
         self.final = torch.nn.Linear(hidden_dim, output_dim)
 
@@ -69,8 +56,6 @@ class DQN(torch.nn.Module):
         """
         x = self.layer1(x)
         x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
         x = self.final(x)
 
         return x
@@ -89,7 +74,7 @@ class Agent(object):
         self.output_dim = output_dim
 
         self.loss_fn = torch.nn.MSELoss()
-        self.optim = torch.optim.Adam(self.dqn.parameters(), lr=0.0001)
+        self.optim = torch.optim.Adam(self.dqn.parameters())
 
     def get_action(self, X):
         """Returns an action
@@ -154,7 +139,7 @@ def train_helper(agent: Agent, minibatch, gamma: float) -> float:
 env = gym.make("CartPole-v0")
 # env = gym.wrappers.Monitor(env, directory="monitors", force=True)
 rewards = deque(maxlen=100)
-input_dim, output_dim = 4, 5 #get_env_dim(env)
+input_dim, output_dim = 4, 2 #get_env_dim(env)
 agent = Agent(input_dim, output_dim, hidden_dim)
 replay_memory = [] # ReplayMemory(replay_mem)
 replay_time = 0
@@ -170,9 +155,6 @@ for i in range(n_episode):
     s = env.reset()
     done = False
     total_reward = 0
-    replay_time = 0
-    x = []
-    theta = []
 
     while not done:
         # Determine Action
@@ -182,28 +164,14 @@ for i in range(n_episode):
             # current_qs = current_qs_tensor.clone().data.numpy()
             # u = np.argmax(current_qs)
             a = agent.get_action(s)
-            act = action_list[a]
         else:
             a = np.random.randint(len(action_list))
-            act = action_list[a]
-            
-        x.append(s[0])
-        theta.append(s[2])
-        
-        s2, r, done, info = env.step(act)
-        
-        if np.linalg.norm(np.zeros(1) - np.array([s2[0]])) < 0.1:
-            r2 = 0
-        else:
-            r2 = -0.9
-            
-        r = r + r2
+        s2, r, done, info = env.step(a)
 
         total_reward += r
 
         if done:
-            r = -10
-            
+            r = -1
         replay_memory.append([s, a, r, s2, done]) # .push(s, a, r, s2, done)
         replay_time += 1
 
@@ -216,23 +184,13 @@ for i in range(n_episode):
         s = s2
         
     r = total_reward   
-    print("[Episode: {:5}] Reward: {:5.2f} -greedy: {:5.2f} Time: {:5.2f}".format(i + 1, r, eps, replay_time))
+    print("[Episode: {:5}] Reward: {:5} 𝜺-greedy: {:5.2f}".format(i + 1, r, eps))
 
     rewards.append(r)
 
     if len(rewards) == rewards.maxlen:
 
-        if np.mean(rewards) >= 190:
+        if np.mean(rewards) >= 200:
             print("Game cleared in {} games with {}".format(i + 1, np.mean(rewards)))
             break
 env.close()
-
-plt.plot([t for t in range(len(x))],x)
-plt.ylabel(f"x-position [m]")
-plt.xlabel(f"Time Steps")
-plt.show()
-
-plt.plot([t for t in range(len(theta))],theta)
-plt.ylabel(f"Pole Angle [rad]")
-plt.xlabel(f"Time Steps")
-plt.show()
