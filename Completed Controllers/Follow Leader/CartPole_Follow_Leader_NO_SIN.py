@@ -2,6 +2,13 @@ import gym
 import numpy as np
 import matplotlib.pyplot as plt
 
+import torch
+import torch.nn as nn
+import numpy as np
+import random
+import gym
+from collections import deque
+
 # Parameters
 T = 0.02
 K1 = -23.5380
@@ -10,15 +17,15 @@ K3 = -0.7339
 K4 = -1.2783
 
 GAMMA = 0.99
-EPISODES = 3_000
-BATCH_SIZE = 64
-MIN_EPS = 0.01
-HIDDEN_DIM = 12
-MAX_EPISODE = 500
+EPISODES = 5_000
+BATCH_SIZE = 128
+MIN_EPS = 0.001
+HIDDEN_DIM = 32
+MAX_EPISODE = 1_000
 
-action_list = np.array([-10, -3, 0, 3, 10])
+action_list = np.array([-10, -5, -3, -1, 0, 1, 3, 5, 10])
 
-input_dim, output_dim = 4, 5
+input_dim, output_dim = 4, 9
 
 # PyTorch NN
 class DQN(torch.nn.Module):
@@ -51,7 +58,14 @@ class DQN(torch.nn.Module):
             torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM),
             torch.nn.BatchNorm1d(HIDDEN_DIM),
             torch.nn.PReLU()
-        )              
+        )
+        
+        # Linear Layer 5
+        self.layer5 = torch.nn.Sequential(
+            torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM),
+            torch.nn.BatchNorm1d(HIDDEN_DIM),
+            torch.nn.PReLU()
+        )          
         
         # Ouput Layer
         self.final = torch.nn.Linear(HIDDEN_DIM, output_dim)
@@ -62,6 +76,7 @@ class DQN(torch.nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
+        x = self.layer5(x)
         x = self.final(x)
 
         return x
@@ -74,8 +89,8 @@ class Agent(object):
         self.input_dim = input_dim
         self.output_dim = output_dim
 
-        self.loss_fn = torch.nn.MSELoss()
-        self.optim = torch.optim.Adam(self.dqn.parameters(), lr=0.0001)
+        self.loss_fn = torch.nn.L1Loss() # MSELoss()
+        self.optim = torch.optim.Adam(self.dqn.parameters(), lr=0.001)
         
     # Function to determine optimal action for Agent
     def get_action(self, X):
@@ -132,6 +147,9 @@ for episode in range(EPISODES):
     theta_dot_r = []
     x_r = []
     x_dot_r = []
+    
+    x_fol = []
+    theta_fol = []
 
     # Calculate epsilon for episode
     slope = (MIN_EPS - 1) / MAX_EPISODE
@@ -142,6 +160,8 @@ for episode in range(EPISODES):
     observation = env1.reset()
     done = False
     total_reward = 0
+    
+    t = 0
 
     while not done:
         
@@ -149,7 +169,7 @@ for episode in range(EPISODES):
         # LINEAR CONTROLLER
         #
         
-        env.render()
+        # env.render()
         
         # Get observations
         theta = observation[2]
@@ -169,17 +189,17 @@ for episode in range(EPISODES):
         else:
             u = (-K1 * theta + -K2 * theta_dot + -K3 * x + -K4 * x_dot)
             
+        t += 1
+            
         # Apply Control Input
         observation, reward, done, info = env1.step(u)
-        
-        if done:
-            print("Episode finished after {} timesteps".format(t+1))
-            break
-            
-                
+                    
         # 
         # RL CONTROLLER
         #
+        
+        x_fol.append(obs[0])
+        theta_fol.append(obs[2])
         
         # Determine Action
         if np.random.rand() > eps:
@@ -192,14 +212,15 @@ for episode in range(EPISODES):
         obs2, r, done, info = env2.step(a)
         
         # Calculate Reward
-        r2 = - np.linalg.norm(np.array([observation[0], observation[1], observation[2], observation[3]]) - np.array([obs2[0], obs2[1], obs2[2], obs2[3]]))
+        r2 = - np.linalg.norm(np.array([observation[0], observation[2]]) - np.array([obs2[0], obs2[2]]))
             
-        r = float(r) + r2
+        r = float(r + r2)
         
         # Record Results
         total_reward += r
+        
         if done:
-            r = -10
+            r = -500
         replay_memory.append([obs, a_num, r, obs2, done])
         replay_time += 1
         
@@ -212,26 +233,37 @@ for episode in range(EPISODES):
             
     # Print Results of Episode
     r = total_reward   
-    print("[Episode: {:5}] Reward: {:5} -greedy: {:5.2f}".format(episode + 1, r, eps))
+    print("[Episode: {:5.2f}] Reward: {:5.2f} -greedy: {:5.2f}".format(episode + 1, r, eps))
     
     # Determine if the NN has learned to balance the system and end if so
     rewards.append(r)
     if len(rewards) == rewards.maxlen:
 
-        if np.mean(rewards) >= 190:
+        if np.mean(rewards) >= 160:
             print("Game cleared in {} games with {}".format(episode + 1, np.mean(rewards)))
             break
  
-# Close Environment
-env.close()
+# Close Environments
+env1.close()
+env2.close()
 
 # Plot Outputs
-plt.plot([t for t in range(len(x_r)],x_r)
+plt.plot([t for t in range(len(x_r))],x_r)
 plt.ylabel(f"x-position [m]")
 plt.xlabel(f"Time Steps")
 plt.show()
 
 plt.plot([t for t in range(len(theta_r))],theta_r)
+plt.ylabel(f"Pole Angle [rad]")
+plt.xlabel(f"Time Steps")
+plt.show()
+
+plt.plot([t for t in range(len(x_fol))],x_fol)
+plt.ylabel(f"x-position [m]")
+plt.xlabel(f"Time Steps")
+plt.show()
+
+plt.plot([t for t in range(len(theta_fol))],theta_fol)
 plt.ylabel(f"Pole Angle [rad]")
 plt.xlabel(f"Time Steps")
 plt.show()
