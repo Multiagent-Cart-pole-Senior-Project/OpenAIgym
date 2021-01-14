@@ -15,12 +15,14 @@ K1 = -23.5380
 K2 = -5.1391
 K3 = -0.7339
 K4 = -1.2783
+amplitude = 0.05
+w = 0.5
 
 GAMMA = 0.99
 EPISODES = 3_000
 BATCH_SIZE = 64
 MIN_EPS = 0.01
-HIDDEN_DIM = 18
+HIDDEN_DIM = 24
 MAX_EPISODE = 200
 
 action_list = np.array([-20, -10, 0, 10, 20]) # np.array([-10, -5, -3, -1, 0, 1, 3, 5, 10])
@@ -154,22 +156,22 @@ for episode in range(EPISODES):
         #
         
         # Get observations
-        theta = observation[2]
-        theta_dot = observation[3]
-        x = observation[0]
-        x_dot = observation[1]   
+        theta_pr = observation[2]
+        theta_dot_pr = observation[3]
+        x_pr = observation[0]
+        x_dot_pr = observation[1]   
 
         # Save observations for recording
-        theta_r.append(theta)
-        theta_dot_r.append(theta_dot)
-        x_r.append(x)
-        x_dot_r.append(x_dot)
+        theta_r.append(theta_pr)
+        theta_dot_r.append(theta_dot_pr)
+        x_r.append(x_pr)
+        x_dot_r.append(x_dot_pr)
         
         # Calculate Control Input
         if t == 0:
-            u = np.array([(-K1 * theta + -K2 * theta_dot + -K3 * x + -K4 * x_dot)])
+            u = np.array([((-K1 * theta_pr + -K2 * theta_dot_pr + -K3 * x_pr + -K4 * x_dot_pr) + amplitude*np.sin(w*T*t))])
         else:
-            u = (-K1 * theta + -K2 * theta_dot + -K3 * x + -K4 * x_dot)
+            u = (-K1 * theta_pr + -K2 * theta_dot_pr + -K3 * x_pr + -K4 * x_dot_pr) + amplitude*np.sin(w*T*t)
             
         t += 1
             
@@ -189,16 +191,16 @@ for episode in range(EPISODES):
         # Determine Action
         if np.random.rand() > eps:
             a_num = agent.get_action(obs)
-            a = action_list[a_num]
+            a = action_list[a_num] + (-K1 * obs[2] + -K2 * obs[3] + -K3 * obs[0] + -K4 * obs[1]) # RL + PD
         else:
             a_num = np.random.randint(len(action_list))
-            a = action_list[a_num]
+            a = action_list[a_num] + (-K1 * obs[2] + -K2 * obs[3] + -K3 * obs[0] + -K4 * obs[1]) # RL + PD
             
         obs2, r, done, info = env2.step(a)
         
         # Calculate Reward
         if t > 0:
-            r2 = - np.linalg.norm(np.array([2 * observation[0], observation[2]]) - np.array([2 * obs2[0], obs2[2]]))
+            r2 = - np.linalg.norm(np.array([observation[0], observation[1], observation[2], observation[3]]) - np.array([obs2[0], obs2[1], obs2[2], obs2[3]]))
         else: 
             r2 = 0
             
@@ -221,8 +223,8 @@ for episode in range(EPISODES):
         obs = obs2
             
     # Print Results of Episode
-    r = total_reward   
-    print("[Episode: {:5.2f}] Reward: {:5.2f} -greedy: {:5.2f} Time: {:5.2f}".format(episode + 1, r, eps, t))
+    r = total_reward
+    print("[Episode: {:5.2f}] Reward: {:5.2f} -greedy: {:5.2f} Time: {:5.2f}".format(episode + 1, float(r), eps, t))
     
     # Determine if the NN has learned to balance the system and end if so
     rewards.append(r)
