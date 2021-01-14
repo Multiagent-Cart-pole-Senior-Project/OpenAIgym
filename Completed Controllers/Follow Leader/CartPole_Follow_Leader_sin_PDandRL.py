@@ -22,12 +22,12 @@ GAMMA = 0.99
 EPISODES = 3_000
 BATCH_SIZE = 64
 MIN_EPS = 0.01
-HIDDEN_DIM = 24
+HIDDEN_DIM = 16
 MAX_EPISODE = 200
 
-action_list = np.array([-20, -10, 0, 10, 20]) # np.array([-10, -5, -3, -1, 0, 1, 3, 5, 10])
+action_list = np.array([-10, -5, -1, 1, 5, 10]) # np.array([-10, -5, -3, -1, 0, 1, 3, 5, 10])
 
-input_dim, output_dim = 4, 5
+input_dim, output_dim = 4, 6
 
 # PyTorch NN
 class DQN(torch.nn.Module):
