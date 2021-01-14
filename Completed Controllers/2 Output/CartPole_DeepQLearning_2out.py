@@ -18,7 +18,7 @@ HIDDEN_DIM = 12
 MAX_EPISODE = 50
 input_dim, output_dim = 4, 2
 
-action_list = np.array([0, 1])
+action_list = np.array([-10, 10])
 
 # PyTorch NN
 class DQN(torch.nn.Module):
@@ -121,18 +121,26 @@ for episode in range(EPISODES):
     
     # Simulation Loop
     while not done:
+    
+        if episode > EPISODES/3:
+            env.render()
+
         # Determine Action
         if np.random.rand() > eps:
-            a = agent.get_action(obs)
+            action = agent.get_action(obs)
+            a = action_list[action]
         else:
-            a = np.random.randint(len(action_list))
+            action = np.random.randint(len(action_list))
+            a = action_list[action]
+            
         obs2, r, done, info = env.step(a)
         
         # Record Results
         total_reward += r
         if done:
             r = -1
-        replay_memory.append([obs, a, r, obs2, done])
+            
+        replay_memory.append([obs, action, r, obs2, done])
         replay_time += 1
         
         # Train after 64 timesteps with random sample of 64 from replay memory
@@ -150,7 +158,7 @@ for episode in range(EPISODES):
     rewards.append(r)
     if len(rewards) == rewards.maxlen:
 
-        if np.mean(rewards) >= 200:
+        if np.mean(rewards) >= 800:
             print("Game cleared in {} games with {}".format(episode + 1, np.mean(rewards)))
             break
 

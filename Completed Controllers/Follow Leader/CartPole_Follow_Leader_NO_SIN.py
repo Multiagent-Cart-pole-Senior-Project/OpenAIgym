@@ -17,15 +17,15 @@ K3 = -0.7339
 K4 = -1.2783
 
 GAMMA = 0.99
-EPISODES = 5_000
-BATCH_SIZE = 128
-MIN_EPS = 0.001
-HIDDEN_DIM = 32
-MAX_EPISODE = 1_000
+EPISODES = 3_000
+BATCH_SIZE = 64
+MIN_EPS = 0.01
+HIDDEN_DIM = 16
+MAX_EPISODE = 50
 
-action_list = np.array([-10, -5, -3, -1, 0, 1, 3, 5, 10])
+action_list = np.array([-10, 0, 10]) # np.array([-10, -5, -3, -1, 0, 1, 3, 5, 10])
 
-input_dim, output_dim = 4, 9
+input_dim, output_dim = 4, 3
 
 # PyTorch NN
 class DQN(torch.nn.Module):
@@ -44,28 +44,7 @@ class DQN(torch.nn.Module):
             torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM),
             torch.nn.BatchNorm1d(HIDDEN_DIM),
             torch.nn.PReLU()
-        )
-        
-        # Linear Layer 3
-        self.layer3 = torch.nn.Sequential(
-            torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM),
-            torch.nn.BatchNorm1d(HIDDEN_DIM),
-            torch.nn.PReLU()
-        )     
-        
-        # Linear Layer 4
-        self.layer4 = torch.nn.Sequential(
-            torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM),
-            torch.nn.BatchNorm1d(HIDDEN_DIM),
-            torch.nn.PReLU()
-        )
-        
-        # Linear Layer 5
-        self.layer5 = torch.nn.Sequential(
-            torch.nn.Linear(HIDDEN_DIM, HIDDEN_DIM),
-            torch.nn.BatchNorm1d(HIDDEN_DIM),
-            torch.nn.PReLU()
-        )          
+        )    
         
         # Ouput Layer
         self.final = torch.nn.Linear(HIDDEN_DIM, output_dim)
@@ -74,9 +53,6 @@ class DQN(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.layer1(x)
         x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        x = self.layer5(x)
         x = self.final(x)
 
         return x
@@ -89,7 +65,7 @@ class Agent(object):
         self.input_dim = input_dim
         self.output_dim = output_dim
 
-        self.loss_fn = torch.nn.L1Loss() # MSELoss()
+        self.loss_fn = torch.nn.MSELoss()
         self.optim = torch.optim.Adam(self.dqn.parameters(), lr=0.001)
         
     # Function to determine optimal action for Agent
@@ -169,8 +145,6 @@ for episode in range(EPISODES):
         # LINEAR CONTROLLER
         #
         
-        # env.render()
-        
         # Get observations
         theta = observation[2]
         theta_dot = observation[3]
@@ -198,6 +172,9 @@ for episode in range(EPISODES):
         # RL CONTROLLER
         #
         
+        if episode > EPISODES/3:
+            env2.render()
+        
         x_fol.append(obs[0])
         theta_fol.append(obs[2])
         
@@ -212,15 +189,19 @@ for episode in range(EPISODES):
         obs2, r, done, info = env2.step(a)
         
         # Calculate Reward
-        r2 = - np.linalg.norm(np.array([observation[0], observation[2]]) - np.array([obs2[0], obs2[2]]))
+        if t > 0:
+            r2 = - np.linalg.norm(np.array([observation[0], observation[2]]) - np.array([obs2[0], obs2[2]]))
+        else: 
+            r2 = 0
             
-        r = float(r + r2)
+        r = r + r2
         
         # Record Results
         total_reward += r
         
         if done:
-            r = -500
+            r = -100
+            
         replay_memory.append([obs, a_num, r, obs2, done])
         replay_time += 1
         
@@ -233,13 +214,13 @@ for episode in range(EPISODES):
             
     # Print Results of Episode
     r = total_reward   
-    print("[Episode: {:5.2f}] Reward: {:5.2f} -greedy: {:5.2f}".format(episode + 1, r, eps))
+    print("[Episode: {:5.2f}] Reward: {:5.2f} -greedy: {:5.2f} Time: {:5.2f}".format(episode + 1, r, eps, t))
     
     # Determine if the NN has learned to balance the system and end if so
     rewards.append(r)
     if len(rewards) == rewards.maxlen:
 
-        if np.mean(rewards) >= 160:
+        if np.mean(rewards) >= 800:
             print("Game cleared in {} games with {}".format(episode + 1, np.mean(rewards)))
             break
  
@@ -264,6 +245,16 @@ plt.xlabel(f"Time Steps")
 plt.show()
 
 plt.plot([t for t in range(len(theta_fol))],theta_fol)
+plt.ylabel(f"Pole Angle [rad]")
+plt.xlabel(f"Time Steps")
+plt.show()
+
+plt.plot([t for t in range(len(x_fol))],abs(x_r - x_fol))
+plt.ylabel(f"x-position [m]")
+plt.xlabel(f"Time Steps")
+plt.show()
+
+plt.plot([t for t in range(len(theta_fol))],abs(theta_r - theta_fol))
 plt.ylabel(f"Pole Angle [rad]")
 plt.xlabel(f"Time Steps")
 plt.show()
